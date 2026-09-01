@@ -1,0 +1,50 @@
+name: Patch homepage carousels
+on:
+  push:
+    paths:
+      - '.github/workflows/mobile-carousels.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch responsive carousels
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+
+          s=s.replace(".quotes{display:grid;grid-template-columns:1fr 1fr;gap:15px}", ".quotes{display:grid;grid-template-columns:1fr 1fr;gap:15px}.carousel-controls{display:flex;justify-content:flex-end;gap:8px;margin:-50px 0 15px}.carousel-btn{width:38px;height:38px;border:1px solid #d7cfc2;background:#fff;color:var(--navy);border-radius:50%;font-weight:900;cursor:pointer;box-shadow:0 4px 10px #071d3512}.carousel-btn:hover{background:var(--navy);color:#fff}")
+          s=s.replace(".shoutwall{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}", ".shoutwall{display:flex;gap:15px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none;padding:2px 2px 10px}.shoutwall::-webkit-scrollbar{display:none}.shoutwall .shout{flex:0 0 calc((100% - 30px)/3);scroll-snap-align:start}")
+          s=s.replace(".shout{position:relative", ".shout{position:relative")
+          s=s.replace("@media(max-width:1000px){.codegrid{grid-template-columns:1fr 1fr}.code-title{grid-column:1/-1;margin-bottom:10px}.storygrid{grid-template-columns:1fr}.strip{grid-template-columns:1fr 1fr}.shoutwall{grid-template-columns:1fr 1fr}}", "@media(max-width:1000px){.codegrid{grid-template-columns:1fr 1fr}.code-title{grid-column:1/-1;margin-bottom:10px}.storygrid{grid-template-columns:1fr}.strip{grid-template-columns:1fr 1fr}.shoutwall .shout{flex-basis:calc((100% - 15px)/2)}}")
+          s=s.replace("@media(max-width:720px){.links{display:none}", "@media(max-width:720px){.links{display:none}")
+          s=s.replace(".quotes,.shoutwall{grid-template-columns:1fr}", ".quotes{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none;padding:2px 2px 12px}.quotes::-webkit-scrollbar{display:none}.quotes .note{flex:0 0 100%;scroll-snap-align:start}.shoutwall .shout{flex:0 0 100%}.carousel-controls{display:flex;margin:-49px 0 15px}")
+
+          old='<div id="words"><h2 class="brush">WORDS WE CARRY</h2><div class="quotes">'
+          new='<div id="words"><h2 class="brush">WORDS WE CARRY</h2><div class="carousel-controls words-controls"><button class="carousel-btn" type="button" onclick="slideCarousel(\'wordsSlider\',-1)" aria-label="Previous quote">‹</button><button class="carousel-btn" type="button" onclick="slideCarousel(\'wordsSlider\',1)" aria-label="Next quote">›</button></div><div id="wordsSlider" class="quotes">'
+          if old not in s: raise SystemExit('words block not found')
+          s=s.replace(old,new,1)
+
+          old='<section id="shoutouts" class="shoutsec"><h2 class="brush">REVOLUTION SHOUTOUTS</h2><div class="empty" style="margin-bottom:14px">Approved messages from 4R7. The sender stays anonymous here.</div><div id="publicShoutouts" class="shoutwall">'
+          new='<section id="shoutouts" class="shoutsec"><h2 class="brush">REVOLUTION SHOUTOUTS</h2><div class="carousel-controls"><button class="carousel-btn" type="button" onclick="slideCarousel(\'publicShoutouts\',-1)" aria-label="Previous shoutouts">‹</button><button class="carousel-btn" type="button" onclick="slideCarousel(\'publicShoutouts\',1)" aria-label="Next shoutouts">›</button></div><div class="empty" style="margin-bottom:14px">Approved messages from 4R7. The sender stays anonymous here.</div><div id="publicShoutouts" class="shoutwall">'
+          if old not in s: raise SystemExit('shoutout block not found')
+          s=s.replace(old,new,1)
+
+          marker="async function publicShoutoutPhoto(path){"
+          js="function slideCarousel(id,dir){const box=document.getElementById(id);if(!box)return;const card=box.querySelector('.note,.shout');if(!card)return;const gap=15;box.scrollBy({left:dir*(card.getBoundingClientRect().width+gap),behavior:'smooth'})}\n"
+          if js.strip() not in s:
+              s=s.replace(marker,js+marker,1)
+
+          p.write_text(s)
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Make homepage quotes and shoutouts swipeable"
+          git push

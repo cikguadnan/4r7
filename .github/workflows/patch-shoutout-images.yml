@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - '.github/workflows/patch-shoutout-images.yml'
+  issues:
+    types: [opened]
 
 permissions:
   contents: write

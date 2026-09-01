@@ -1,5 +1,8 @@
 name: Polish mobile homepage carousels
-on: workflow_dispatch
+"on":
+  push:
+    paths:
+      - '.github/workflows/polish-mobile-carousels.yml'
 permissions:
   contents: write
 jobs:
@@ -7,4 +10,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo ready
+      - name: Update homepage and favicons
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          if '.carousel-dots{' not in s:
+            s=s.replace('.empty{color:#6f7d89;font-size:13px}', '.empty{color:#6f7d89;font-size:13px}.carousel-dots{display:none;align-items:center;justify-content:center;gap:7px;margin:12px 0 2px}.carousel-dot{width:8px;height:8px;border:0;border-radius:50%;padding:0;background:#c8c0b5;transition:.2s}.carousel-dot.active{width:20px;border-radius:10px;background:var(--red)}')
+          old='.quotes{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none;padding:2px 2px 12px}.quotes::-webkit-scrollbar{display:none}.quotes .note{flex:0 0 100%;scroll-snap-align:start}.shoutwall .shout{flex:0 0 100%}.carousel-controls{display:flex;margin:-49px 0 15px}'
+          new='#words{min-width:0;max-width:100%;overflow:hidden}.quotes{width:100%;max-width:100%;display:flex;gap:0;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none;padding:2px 0 10px}.quotes::-webkit-scrollbar{display:none}.quotes .note{box-sizing:border-box;flex:0 0 100%;width:100%;min-width:100%;max-width:100%;min-height:128px;padding:18px 16px;scroll-snap-align:start;overflow-wrap:anywhere;word-break:normal;font-size:clamp(19px,5.7vw,23px)}.words-controls{display:none}.shoutsec{overflow:hidden}.shoutwall{width:100%;max-width:100%;gap:0;padding:2px 0 4px}.shoutwall .shout{box-sizing:border-box;flex:0 0 100%;width:100%;min-width:100%;max-width:100%;min-height:0;padding:18px}.shout p{overflow-wrap:anywhere}.shout img{height:auto;max-height:320px;aspect-ratio:4/3}.shoutsec>.carousel-controls{display:none}.carousel-dots{display:flex}'
+          if old in s: s=s.replace(old,new)
+          if 'id="shoutDots"' not in s:
+            s=s.replace('<div id="publicShoutouts" class="shoutwall"><div class="empty">Loading shoutouts…</div></div></section>', '<div id="publicShoutouts" class="shoutwall"><div class="empty">Loading shoutouts…</div></div><div id="shoutDots" class="carousel-dots" aria-label="Shoutout pages"></div></section>')
+          if 'function setupShoutDots()' not in s:
+            hook='loadPublicShoutouts();boot();'
+            js="""function setupShoutDots(){const slider=document.getElementById('publicShoutouts'),dots=document.getElementById('shoutDots');if(!slider||!dots)return;const cards=[...slider.querySelectorAll('.shout')];dots.innerHTML='';if(cards.length<2)return;cards.forEach((_,i)=>{const d=document.createElement('button');d.type='button';d.className='carousel-dot'+(i===0?' active':'');d.setAttribute('aria-label','Go to shoutout '+(i+1));d.onclick=()=>slider.scrollTo({left:slider.clientWidth*i,behavior:'smooth'});dots.appendChild(d)});let raf;slider.addEventListener('scroll',()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{const i=Math.max(0,Math.min(cards.length-1,Math.round(slider.scrollLeft/Math.max(1,slider.clientWidth))));[...dots.children].forEach((d,n)=>d.classList.toggle('active',n===i))})},{passive:true})}
+          const originalLoadPublicShoutouts=loadPublicShoutouts;loadPublicShoutouts=async function(){await originalLoadPublicShoutouts();setupShoutDots()};
+          loadPublicShoutouts();boot();"""
+            if hook in s: s=s.replace(hook,js)
+          p.write_text(s)
+          for name in ['student.html','teacher.html']:
+            q=Path(name); t=q.read_text()
+            if 'assets/favicon.svg' not in t:
+              t=t.replace('</title>', '</title>\n<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">',1)
+              q.write_text(t)
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html student.html teacher.html
+          git commit -m "Polish mobile carousels and add dashboard favicons" || exit 0
+          git push
